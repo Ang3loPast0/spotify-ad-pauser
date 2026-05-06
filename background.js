@@ -14,12 +14,14 @@ let replState = STATE.IDLE;
 let replSpotifyTabId = null;
 let replYtTabId = null;
 let replLoadingTimeout = null;
+let adEndedDuringLoad = false;
 
 function resetReplacement() {
   if (replLoadingTimeout) { clearTimeout(replLoadingTimeout); replLoadingTimeout = null; }
   replState = STATE.IDLE;
   replSpotifyTabId = null;
   replYtTabId = null;
+  adEndedDuringLoad = false;
 }
 
 function notifyError(reason) {
@@ -81,7 +83,7 @@ async function startReplacement(spotifyTabId, msg) {
         const sId = replSpotifyTabId;
         failToLegacy(sId, 'Timeout caricamento YouTube.');
       }
-    }, 25000);
+    }, 45000);
   } catch (err) {
     await failToLegacy(spotifyTabId, 'Impossibile aprire tab YouTube.');
   }
@@ -140,20 +142,36 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
   }
 
   if (msg?.type === 'video-ready') {
-    if (replState === STATE.YT_LOADING && sender.tab?.id === replYtTabId) {
+    if (sender.tab?.id !== replYtTabId) return;
+    if (replState === STATE.YT_LOADING) {
       if (replLoadingTimeout) { clearTimeout(replLoadingTimeout); replLoadingTimeout = null; }
-      replState = STATE.YT_PLAYING_AD_LIVE;
-      console.log('[SpotifyAutoPause/BG] YT pronto, stato AD_LIVE');
+      // Se la pub Spotify era gia' finita mentre caricavamo, vai direttamente in AD_OVER
+      if (adEndedDuringLoad) {
+        adEndedDuringLoad = false;
+        replState = STATE.YT_PLAYING_AD_OVER;
+        chrome.tabs.sendMessage(replSpotifyTabId, { type: 'pause-spotify' }).catch(() => {});
+        console.log('[SpotifyAutoPause/BG] YT pronto (pub gia finita), stato AD_OVER');
+      } else {
+        replState = STATE.YT_PLAYING_AD_LIVE;
+        console.log('[SpotifyAutoPause/BG] YT pronto, stato AD_LIVE');
+      }
     }
     return;
   }
 
   if (msg?.type === 'ad-ended') {
-    if (replState === STATE.YT_PLAYING_AD_LIVE && sender.tab?.id === replSpotifyTabId) {
+    if (sender.tab?.id !== replSpotifyTabId) return;
+    if (replState === STATE.YT_PLAYING_AD_LIVE) {
       replState = STATE.YT_PLAYING_AD_OVER;
       // Pausa Spotify subito per non far partire la canzone vera
       chrome.tabs.sendMessage(replSpotifyTabId, { type: 'pause-spotify' }).catch(() => {});
       console.log('[SpotifyAutoPause/BG] pub finita, Spotify in pausa, YT continua');
+    } else if (replState === STATE.YT_LOADING) {
+      // Pub finita prima che YT abbia caricato: ricorda di pausare quando arriva video-ready
+      adEndedDuringLoad = true;
+      // Pausa subito Spotify per evitare che la canzone vera parta (anche se YT non sta ancora suonando)
+      chrome.tabs.sendMessage(replSpotifyTabId, { type: 'pause-spotify' }).catch(() => {});
+      console.log('[SpotifyAutoPause/BG] pub finita ma YT ancora in loading, Spotify in pausa');
     }
     return;
   }
