@@ -20,13 +20,32 @@
     endedSent = false;
     v.addEventListener('ended', onEnded);
     log('listener attached to <video>');
-    if (v.readyState >= 2) {
+
+    const tryPlayAndNotify = () => {
+      // Forza play (autoplay puo' essere bloccato sui background tab)
+      const p = v.play();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    };
+
+    const notifyReady = () => {
       chrome.runtime.sendMessage({ type: 'video-ready' }).catch(() => {});
+    };
+
+    // Notifica appena il video inizia a suonare (evento 'playing')
+    v.addEventListener('playing', notifyReady, { once: true });
+    // Fallback: notifica anche su loadeddata (caso in cui playing non scatti subito)
+    if (v.readyState >= 2) {
+      notifyReady();
     } else {
-      v.addEventListener('loadeddata', () => {
-        chrome.runtime.sendMessage({ type: 'video-ready' }).catch(() => {});
-      }, { once: true });
+      v.addEventListener('loadeddata', notifyReady, { once: true });
     }
+    tryPlayAndNotify();
+    // Riprova play periodicamente per i primi 10s
+    let attempts = 0;
+    const playIv = setInterval(() => {
+      if (++attempts > 20 || !v.paused) { clearInterval(playIv); return; }
+      tryPlayAndNotify();
+    }, 500);
     return true;
   };
 

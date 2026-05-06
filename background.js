@@ -81,7 +81,7 @@ async function startReplacement(spotifyTabId, msg) {
         const sId = replSpotifyTabId;
         failToLegacy(sId, 'Timeout caricamento YouTube.');
       }
-    }, 12000);
+    }, 25000);
   } catch (err) {
     await failToLegacy(spotifyTabId, 'Impossibile aprire tab YouTube.');
   }
