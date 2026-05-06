@@ -21,30 +21,41 @@
     v.addEventListener('ended', onEnded);
     log('listener attached to <video>');
 
-    const tryPlayAndNotify = () => {
-      // Forza play (autoplay puo' essere bloccato sui background tab)
-      const p = v.play();
-      if (p && typeof p.catch === 'function') p.catch(() => {});
-    };
+    // Strategia: autoplay con audio bloccato sui background tab.
+    // Avviamo MUTED (autoplay sempre permesso) e poi smutiamo appena parte.
+    v.muted = true;
 
     const notifyReady = () => {
       chrome.runtime.sendMessage({ type: 'video-ready' }).catch(() => {});
     };
 
-    // Notifica appena il video inizia a suonare (evento 'playing')
-    v.addEventListener('playing', notifyReady, { once: true });
-    // Fallback: notifica anche su loadeddata (caso in cui playing non scatti subito)
-    if (v.readyState >= 2) {
+    const tryPlay = () => {
+      const p = v.play();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    };
+
+    let unmuted = false;
+    v.addEventListener('playing', () => {
+      log('video playing, smuto');
+      if (!unmuted) {
+        unmuted = true;
+        try { v.muted = false; } catch (e) {}
+      }
       notifyReady();
+    });
+
+    // Fallback: notifica ready anche se solo loadeddata scatta (raro)
+    if (v.readyState >= 2) {
+      tryPlay();
     } else {
-      v.addEventListener('loadeddata', notifyReady, { once: true });
+      v.addEventListener('loadeddata', tryPlay, { once: true });
     }
-    tryPlayAndNotify();
-    // Riprova play periodicamente per i primi 10s
+    tryPlay();
+    // Retry play per i primi 15s
     let attempts = 0;
     const playIv = setInterval(() => {
-      if (++attempts > 20 || !v.paused) { clearInterval(playIv); return; }
-      tryPlayAndNotify();
+      if (++attempts > 30 || !v.paused) { clearInterval(playIv); return; }
+      tryPlay();
     }, 500);
     return true;
   };
