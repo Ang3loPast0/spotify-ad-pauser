@@ -70,32 +70,28 @@
   // ----- lettura coda Spotify dal DOM -----
   const readQueue = () => {
     const tracks = [];
-    // Tentativo 1: pannello "Coda" aperto
-    const queuePanel = document.querySelector('[aria-label="Coda"], [aria-label="Queue"], aside[aria-label*="oda"], aside[aria-label*="ueue"]');
-    if (queuePanel) {
-      const rows = queuePanel.querySelectorAll('[role="row"], [data-testid="tracklist-row"]');
-      rows.forEach((row) => {
-        const titleEl = row.querySelector('a[href^="/track/"], div[data-encore-id="text"]');
-        const artistEl = row.querySelector('a[href^="/artist/"]');
-        const title = titleEl?.textContent?.trim();
-        const artist = artistEl?.textContent?.trim();
-        if (title && artist) tracks.push(`${artist} - ${title}`);
+    const rows = document.querySelectorAll('[data-testid="tracklist-row"]');
+    rows.forEach((row) => {
+      // Strategia 1: aria-label del bottone Play ("Riproduci TITLE di ARTIST" / "Play TITLE by ARTIST")
+      const playBtn = row.querySelector('button[aria-label^="Riproduci "], button[aria-label^="Play "]');
+      if (playBtn) {
+        const label = playBtn.getAttribute('aria-label') || '';
+        const m = label.match(/^(?:Riproduci|Play)\s+(.+?)\s+(?:di|by)\s+(.+)$/);
+        if (m) {
+          tracks.push(`${m[2].trim()} - ${m[1].trim()}`);
+          return;
+        }
+      }
+      // Strategia 2 (legacy): link /track/ e /artist/
+      const links = row.querySelectorAll('a');
+      let title = null, artist = null;
+      links.forEach((a) => {
+        const href = a.getAttribute('href') || '';
+        if (href.startsWith('/track/') && !title) title = a.textContent?.trim();
+        if (href.startsWith('/artist/') && !artist) artist = a.textContent?.trim();
       });
-    }
-    // Tentativo 2: tracklist principale
-    if (!tracks.length) {
-      const rows = document.querySelectorAll('[data-testid="tracklist-row"]');
-      rows.forEach((row) => {
-        const links = row.querySelectorAll('a');
-        let title = null, artist = null;
-        links.forEach((a) => {
-          const href = a.getAttribute('href') || '';
-          if (href.startsWith('/track/') && !title) title = a.textContent?.trim();
-          if (href.startsWith('/artist/') && !artist) artist = a.textContent?.trim();
-        });
-        if (title && artist) tracks.push(`${artist} - ${title}`);
-      });
-    }
+      if (title && artist) tracks.push(`${artist} - ${title}`);
+    });
     return tracks;
   };
 
