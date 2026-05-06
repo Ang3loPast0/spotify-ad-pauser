@@ -1,13 +1,18 @@
 {
   "manifest_version": 3,
   "name": "Spotify Auto-Pause dopo Pub",
-  "version": "1.3",
-  "description": "Notifica del browser all'inizio di ogni pub Spotify: scegli se mettere pausa quando finisce.",
+  "version": "1.4",
+  "description": "Notifica del browser all'inizio di ogni pub Spotify: scegli se mettere pausa quando finisce. Sostituzione opzionale con canzone YouTube.",
   "icons": { "128": "icon.png" },
   "content_scripts": [
     {
       "matches": ["https://open.spotify.com/*"],
       "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.youtube.com/watch*", "https://www.youtube.com/results*"],
+      "js": ["youtube.js"],
       "run_at": "document_idle"
     }
   ],
@@ -19,6 +24,7 @@
     "default_title": "Spotify Auto-Pause",
     "default_icon": "icon.png"
   },
+  "host_permissions": ["https://www.youtube.com/*"],
   "permissions": ["storage", "notifications", "tabs"],
   "commands": {
     "toggle-pause": {
