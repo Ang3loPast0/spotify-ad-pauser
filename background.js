@@ -5,6 +5,12 @@ const NOTIF_ID_PREFIX = 'sap-ad-';
 const pending = new Map(); // notifId -> tabId
 
 chrome.runtime.onMessage.addListener((msg, sender) => {
+  if (msg?.type === 'mute-tab') {
+    if (sender.tab?.id != null) {
+      chrome.tabs.update(sender.tab.id, { muted: !!msg.mute }).catch(() => {});
+    }
+    return;
+  }
   if (msg?.type !== 'ad-started') return;
   if (!sender.tab?.id) return;
   // chiudi eventuali notifiche pendenti per questa tab (vecchia pub non risposta)

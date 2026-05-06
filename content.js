@@ -2,14 +2,25 @@
   let wasAd = false;
   let armed = false;        // pausa one-shot al termine della pub corrente
   let mode = 'prompt';      // 'off' | 'auto' | 'prompt'
+  let muteAds = false;
 
   const STABLE_MS = 2000;
   let candidate = false;
   let candidateSince = 0;
 
-  chrome.storage?.sync.get({ mode: 'prompt' }, (r) => { mode = r.mode; });
+  chrome.storage?.sync.get({ mode: 'prompt', muteAds: false }, (r) => {
+    mode = r.mode;
+    muteAds = !!r.muteAds;
+  });
   chrome.storage?.onChanged.addListener((c) => {
     if (c.mode) mode = c.mode.newValue;
+    if (c.muteAds) {
+      muteAds = !!c.muteAds.newValue;
+      // se disattivo l'opzione mentre la tab e' mutata, smuta subito
+      if (!muteAds) chrome.runtime.sendMessage({ type: 'mute-tab', mute: false });
+      // se attivo l'opzione mentre c'e' una pub in corso, muta subito
+      else if (wasAd) chrome.runtime.sendMessage({ type: 'mute-tab', mute: true });
+    }
   });
 
   // ----- e' Spotify in pausa? -----
@@ -73,7 +84,7 @@
 
   // ----- loop principale con debounce -----
   const tick = () => {
-    if (mode === 'off') return;
+    if (mode === 'off' && !muteAds) return;
     const raw = rawIsAd();
     const now = Date.now();
 
@@ -85,6 +96,7 @@
         const newState = candidate;
         if (newState && !wasAd) {
           // INIZIO pub
+          if (muteAds) chrome.runtime.sendMessage({ type: 'mute-tab', mute: true });
           if (mode === 'auto') {
             armed = true; // automatico: pausa garantita a fine pub
             console.log('[SpotifyAutoPause] Pub iniziata (modalita auto, armato).');
@@ -98,6 +110,7 @@
           if (armed) {
             setTimeout(() => { pause(); armed = false; }, 400);
           }
+          if (muteAds) chrome.runtime.sendMessage({ type: 'mute-tab', mute: false });
           console.log('[SpotifyAutoPause] Pub finita.');
         }
         wasAd = newState;

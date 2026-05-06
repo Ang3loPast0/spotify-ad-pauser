@@ -1,7 +1,12 @@
 const radios = document.querySelectorAll('input[name="mode"]');
 
-chrome.storage.sync.get({ mode: 'prompt' }, (res) => {
+chrome.storage.sync.get({ mode: 'prompt', muteAds: false }, (res) => {
   for (const r of radios) r.checked = (r.value === res.mode);
+  document.getElementById('muteAds').checked = !!res.muteAds;
+});
+
+document.getElementById('muteAds').addEventListener('change', (e) => {
+  chrome.storage.sync.set({ muteAds: e.target.checked });
 });
 
 for (const r of radios) {
