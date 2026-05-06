@@ -46,29 +46,33 @@
 
     const start = Date.now();
     const iv = setInterval(() => {
-      if (Date.now() - start > 8000) {
+      if (Date.now() - start > 10000) {
         clearInterval(iv);
         chrome.runtime.sendMessage({ type: 'yt-error', reason: 'no-results' }).catch(() => {});
         return;
       }
       const renderers = document.querySelectorAll('ytd-video-renderer');
       for (const r of renderers) {
-        const isShort = r.querySelector('[overlay-style="SHORTS"], a[href*="/shorts/"]');
-        if (isShort) continue;
-        const badge = r.querySelector('.badge-style-type-live-now, [aria-label*="LIVE"]');
-        if (badge) continue;
-        const durationEl = r.querySelector('.ytd-thumbnail-overlay-time-status-renderer, span.ytd-thumbnail-overlay-time-status-renderer');
-        const durStr = durationEl?.textContent?.trim();
-        if (!durStr) continue;
-        const parts = durStr.split(':').map((n) => parseInt(n, 10));
-        let seconds = 0;
-        if (parts.length === 2) seconds = parts[0] * 60 + parts[1];
-        else if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-        if (seconds < 60) continue;
-        const link = r.querySelector('a#video-title, a#thumbnail');
+        // Skip Shorts
+        if (r.querySelector('[overlay-style="SHORTS"], a[href*="/shorts/"]')) continue;
+        // Skip live (badge classico, aria-label, oppure testo "LIVE NOW" / "IN DIRETTA")
+        if (r.querySelector('.badge-style-type-live-now, [aria-label*="LIVE" i], [aria-label*="diretta" i]')) continue;
+        // Durata: regex sul testo del renderer (resistente ai cambi di selettori)
+        const text = r.textContent || '';
+        const m = text.match(/(?:^|[^\d])(\d{1,2}):(\d{2})(?::(\d{2}))?(?:[^\d]|$)/);
+        if (m) {
+          const has3 = m[3] !== undefined;
+          const h = has3 ? parseInt(m[1], 10) : 0;
+          const mm = has3 ? parseInt(m[2], 10) : parseInt(m[1], 10);
+          const ss = has3 ? parseInt(m[3], 10) : parseInt(m[2], 10);
+          const seconds = h * 3600 + mm * 60 + ss;
+          if (seconds < 60) continue;
+        }
+        // Se non trovo durata, accetto comunque (meglio click su qualcosa che timeout)
+        const link = r.querySelector('a#video-title, a#thumbnail, a[href*="/watch"]');
         if (!link) continue;
         clearInterval(iv);
-        log('click su risultato valido:', durStr, link.href);
+        log('click su risultato valido:', link.href);
         link.click();
         return;
       }
