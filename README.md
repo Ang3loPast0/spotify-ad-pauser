@@ -1,1 +1,1 @@
-# spotify-ad-pauser-
+# spotify-ad-pauser
