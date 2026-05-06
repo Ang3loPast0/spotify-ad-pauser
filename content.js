@@ -64,8 +64,40 @@
     return false;
   };
 
-  // ----- decisione dalla notifica del browser -----
-  chrome.runtime.onMessage.addListener((msg) => {
+  // ----- lettura coda Spotify dal DOM -----
+  const readQueue = () => {
+    const tracks = [];
+    // Tentativo 1: pannello "Coda" aperto
+    const queuePanel = document.querySelector('[aria-label="Coda"], [aria-label="Queue"], aside[aria-label*="oda"], aside[aria-label*="ueue"]');
+    if (queuePanel) {
+      const rows = queuePanel.querySelectorAll('[role="row"], [data-testid="tracklist-row"]');
+      rows.forEach((row) => {
+        const titleEl = row.querySelector('a[href^="/track/"], div[data-encore-id="text"]');
+        const artistEl = row.querySelector('a[href^="/artist/"]');
+        const title = titleEl?.textContent?.trim();
+        const artist = artistEl?.textContent?.trim();
+        if (title && artist) tracks.push(`${artist} - ${title}`);
+      });
+    }
+    // Tentativo 2: tracklist principale
+    if (!tracks.length) {
+      const rows = document.querySelectorAll('[data-testid="tracklist-row"]');
+      rows.forEach((row) => {
+        const links = row.querySelectorAll('a');
+        let title = null, artist = null;
+        links.forEach((a) => {
+          const href = a.getAttribute('href') || '';
+          if (href.startsWith('/track/') && !title) title = a.textContent?.trim();
+          if (href.startsWith('/artist/') && !artist) artist = a.textContent?.trim();
+        });
+        if (title && artist) tracks.push(`${artist} - ${title}`);
+      });
+    }
+    return tracks;
+  };
+
+  // ----- decisione dalla notifica del browser + nuovi messaggi -----
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg?.type === 'ad-decision') {
       armed = !!msg.arm;
       console.log('[SpotifyAutoPause] Decisione:', armed ? 'PAUSA' : 'ignora');
@@ -79,6 +111,38 @@
         const btn = document.querySelector('[data-testid="control-button-skip-forward"]');
         btn?.click();
       }
+      return;
+    }
+    if (msg?.type === 'read-queue') {
+      sendResponse({ tracks: readQueue() });
+      return true; // async response
+    }
+    if (msg?.type === 'pause-spotify') {
+      pause();
+      return;
+    }
+    if (msg?.type === 'play-spotify') {
+      const btn = document.querySelector('[data-testid="control-button-playpause"]');
+      const label = (btn?.getAttribute('aria-label') || '').toLowerCase();
+      if (btn && (label.includes('play') || label.includes('riprodu'))) {
+        btn.click();
+        console.log('[SpotifyAutoPause] Play premuto.');
+      }
+      return;
+    }
+    if (msg?.type === 'replacement-failed') {
+      // Replacement YT fallito: applica comportamento legacy "come se il toggle fosse off"
+      console.log('[SpotifyAutoPause] replacement fallito, fallback legacy:', mode);
+      if (muteAds && wasAd) {
+        chrome.runtime.sendMessage({ type: 'mute-tab', mute: true });
+      }
+      if (mode === 'auto') {
+        armed = true;
+      } else if (mode === 'prompt') {
+        armed = false;
+        chrome.runtime.sendMessage({ type: 'ad-started', replacement: false });
+      }
+      return;
     }
   });
 
@@ -96,21 +160,45 @@
         const newState = candidate;
         if (newState && !wasAd) {
           // INIZIO pub
-          if (muteAds) chrome.runtime.sendMessage({ type: 'mute-tab', mute: true });
-          if (mode === 'auto') {
-            armed = true; // automatico: pausa garantita a fine pub
-            console.log('[SpotifyAutoPause] Pub iniziata (modalita auto, armato).');
-          } else if (mode === 'prompt') {
-            armed = false; // serve risposta dell'utente
-            chrome.runtime.sendMessage({ type: 'ad-started' });
-            console.log('[SpotifyAutoPause] Pub iniziata (modalita prompt, in attesa).');
-          }
+          chrome.storage.sync.get({
+            ytReplacementEnabled: false,
+            ytSourceSpotify: true,
+            ytSourceCustom: false,
+            ytCustomList: '',
+          }, (cfg) => {
+            if (cfg.ytReplacementEnabled) {
+              // Replacement attivo: override totale del mode (con fallback legacy gestito al fail)
+              armed = false;
+              const queue = cfg.ytSourceSpotify ? readQueue() : [];
+              chrome.runtime.sendMessage({
+                type: 'ad-started',
+                replacement: true,
+                queue,
+                config: cfg,
+                legacyMode: mode,
+                legacyMuteAds: muteAds,
+              });
+              console.log('[SpotifyAutoPause] Pub iniziata (replacement YT richiesto).');
+              return;
+            }
+            // Comportamento esistente
+            if (muteAds) chrome.runtime.sendMessage({ type: 'mute-tab', mute: true });
+            if (mode === 'auto') {
+              armed = true;
+              console.log('[SpotifyAutoPause] Pub iniziata (modalita auto, armato).');
+            } else if (mode === 'prompt') {
+              armed = false;
+              chrome.runtime.sendMessage({ type: 'ad-started', replacement: false });
+              console.log('[SpotifyAutoPause] Pub iniziata (modalita prompt, in attesa).');
+            }
+          });
         } else if (!newState && wasAd) {
           // FINE pub
           if (armed) {
             setTimeout(() => { pause(); armed = false; }, 400);
           }
           if (muteAds) chrome.runtime.sendMessage({ type: 'mute-tab', mute: false });
+          chrome.runtime.sendMessage({ type: 'ad-ended' });
           console.log('[SpotifyAutoPause] Pub finita.');
         }
         wasAd = newState;
