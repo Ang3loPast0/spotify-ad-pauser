@@ -87,3 +87,38 @@ chrome.commands.getAll((cmds) => {
 document.getElementById('customize').addEventListener('click', () => {
   chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
 });
+
+document.getElementById('ytImportPlaylist').addEventListener('click', async () => {
+  const status = document.getElementById('ytImportStatus');
+  status.textContent = 'Importo...';
+  status.style.color = '#aaa';
+  try {
+    const tabs = await chrome.tabs.query({ url: 'https://open.spotify.com/*' });
+    if (!tabs.length) {
+      status.textContent = 'Nessuna tab Spotify aperta.';
+      status.style.color = '#e57373';
+      return;
+    }
+    const tab = tabs.find((t) => t.active) || tabs[0];
+    const response = await chrome.tabs.sendMessage(tab.id, { type: 'read-queue' });
+    const tracks = response?.tracks || [];
+    if (!tracks.length) {
+      status.textContent = 'Nessun brano leggibile dalla pagina corrente.';
+      status.style.color = '#e57373';
+      return;
+    }
+    const current = ytCustomList.value.trim();
+    if (current && !confirm(`Sovrascrivere ${current.split('\n').length} righe esistenti con ${tracks.length} brani?`)) {
+      status.textContent = 'Annullato.';
+      status.style.color = '#aaa';
+      return;
+    }
+    ytCustomList.value = tracks.join('\n');
+    chrome.storage.sync.set({ ytCustomList: ytCustomList.value });
+    status.textContent = `Importati ${tracks.length} brani.`;
+    status.style.color = '#1db954';
+  } catch (err) {
+    status.textContent = 'Errore: ' + (err?.message || err);
+    status.style.color = '#e57373';
+  }
+});
