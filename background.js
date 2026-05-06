@@ -139,7 +139,52 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
     return;
   }
 
-  // Altri messaggi (video-ready, ad-ended, video-ended, yt-error) saranno gestiti nel Task 9
+  if (msg?.type === 'video-ready') {
+    if (replState === STATE.YT_LOADING && sender.tab?.id === replYtTabId) {
+      if (replLoadingTimeout) { clearTimeout(replLoadingTimeout); replLoadingTimeout = null; }
+      replState = STATE.YT_PLAYING_AD_LIVE;
+      console.log('[SpotifyAutoPause/BG] YT pronto, stato AD_LIVE');
+    }
+    return;
+  }
+
+  if (msg?.type === 'ad-ended') {
+    if (replState === STATE.YT_PLAYING_AD_LIVE && sender.tab?.id === replSpotifyTabId) {
+      replState = STATE.YT_PLAYING_AD_OVER;
+      // Pausa Spotify subito per non far partire la canzone vera
+      chrome.tabs.sendMessage(replSpotifyTabId, { type: 'pause-spotify' }).catch(() => {});
+      console.log('[SpotifyAutoPause/BG] pub finita, Spotify in pausa, YT continua');
+    }
+    return;
+  }
+
+  if (msg?.type === 'video-ended') {
+    if (sender.tab?.id !== replYtTabId) return;
+    if (replState === STATE.YT_PLAYING_AD_OVER || replState === STATE.YT_PLAYING_AD_LIVE) {
+      const spotifyId = replSpotifyTabId;
+      const ytId = replYtTabId;
+      const wasOver = replState === STATE.YT_PLAYING_AD_OVER;
+      resetReplacement();
+      // Chiudi tab YT
+      chrome.tabs.remove(ytId).catch(() => {});
+      // Smuta Spotify
+      chrome.tabs.update(spotifyId, { muted: false }).catch(() => {});
+      // Solo se la pub era già finita riavviamo Spotify (canzone era in pausa)
+      if (wasOver) {
+        chrome.tabs.sendMessage(spotifyId, { type: 'play-spotify' }).catch(() => {});
+      }
+      console.log('[SpotifyAutoPause/BG] flow completato');
+    }
+    return;
+  }
+
+  if (msg?.type === 'yt-error') {
+    if (sender.tab?.id === replYtTabId) {
+      const sId = replSpotifyTabId;
+      failToLegacy(sId, 'Errore YouTube: ' + (msg.reason || 'sconosciuto'));
+    }
+    return;
+  }
 });
 
 chrome.notifications.onButtonClicked.addListener((notifId, btnIdx) => {
