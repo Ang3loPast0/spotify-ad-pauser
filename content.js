@@ -3,17 +3,20 @@
   let armed = false;        // pausa one-shot al termine della pub corrente
   let mode = 'prompt';      // 'off' | 'auto' | 'prompt'
   let muteAds = false;
+  let ytReplacementEnabled = false;
 
   const STABLE_MS = 2000;
   let candidate = false;
   let candidateSince = 0;
 
-  chrome.storage?.sync.get({ mode: 'prompt', muteAds: false }, (r) => {
+  chrome.storage?.sync.get({ mode: 'prompt', muteAds: false, ytReplacementEnabled: false }, (r) => {
     mode = r.mode;
     muteAds = !!r.muteAds;
+    ytReplacementEnabled = !!r.ytReplacementEnabled;
   });
   chrome.storage?.onChanged.addListener((c) => {
     if (c.mode) mode = c.mode.newValue;
+    if (c.ytReplacementEnabled) ytReplacementEnabled = !!c.ytReplacementEnabled.newValue;
     if (c.muteAds) {
       muteAds = !!c.muteAds.newValue;
       // se disattivo l'opzione mentre la tab e' mutata, smuta subito
@@ -148,7 +151,7 @@
 
   // ----- loop principale con debounce -----
   const tick = () => {
-    if (mode === 'off' && !muteAds) return;
+    if (mode === 'off' && !muteAds && !ytReplacementEnabled) return;
     const raw = rawIsAd();
     const now = Date.now();
 
