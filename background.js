@@ -208,3 +208,21 @@ chrome.commands.onCommand.addListener(async (command) => {
   const tab = tabs.find((t) => t.active) || tabs[0];
   chrome.tabs.sendMessage(tab.id, { type: 'shortcut', action: command }).catch(() => {});
 });
+
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  if (tabId === replYtTabId && replState !== STATE.IDLE) {
+    console.log('[SpotifyAutoPause/BG] tab YT chiusa manualmente, abort');
+    const spotifyId = replSpotifyTabId;
+    resetReplacement();
+    if (spotifyId != null) {
+      try { await chrome.tabs.update(spotifyId, { muted: false }); } catch (e) {}
+    }
+    // Niente play automatico (decisione utente)
+  }
+  if (tabId === replSpotifyTabId && replState !== STATE.IDLE) {
+    console.log('[SpotifyAutoPause/BG] tab Spotify chiusa, abort');
+    const ytId = replYtTabId;
+    resetReplacement();
+    if (ytId != null) { try { await chrome.tabs.remove(ytId); } catch (e) {} }
+  }
+});
