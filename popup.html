@@ -75,6 +75,44 @@
     </div>
   </label>
 
+  <h2>Replacement YouTube</h2>
+
+  <label class="opt">
+    <input type="checkbox" id="ytReplacementEnabled">
+    <div class="col">
+      <span class="label">Sostituisci pub con canzone YT</span>
+      <span class="desc">Durante una pub apre una tab YouTube in background con una canzone della tua scelta.</span>
+    </div>
+  </label>
+
+  <div id="ytSourcesBlock" style="margin-left: 6px; opacity: 0.5; pointer-events: none;">
+    <div style="font-size: 11px; color: #aaa; margin: 6px 0 4px;">Pesca da:</div>
+
+    <label class="opt" style="padding: 6px 10px;">
+      <input type="checkbox" id="ytSourceSpotify">
+      <div class="col">
+        <span class="label" style="font-size: 12px;">Playlist / coda Spotify</span>
+      </div>
+    </label>
+
+    <label class="opt" style="padding: 6px 10px;">
+      <input type="checkbox" id="ytSourceCustom">
+      <div class="col">
+        <span class="label" style="font-size: 12px;">Lista personalizzata</span>
+      </div>
+    </label>
+
+    <div id="ytSourceWarning" style="display:none; font-size: 10px; color: #e57373; margin: 4px 10px;">
+      Seleziona almeno una fonte.
+    </div>
+
+    <div style="font-size: 11px; color: #aaa; margin: 8px 4px 4px;">Lista personalizzata (una per riga, "Artista - Titolo"):</div>
+    <textarea id="ytCustomList" rows="5" style="width: 100%; box-sizing: border-box; background: #1f1f1f; color: #fff; border: 1px solid #333; border-radius: 6px; padding: 6px; font-size: 11px; font-family: monospace; resize: vertical;"></textarea>
+
+    <button id="ytImportPlaylist" style="width: 100%; margin-top: 6px; background: #333; color: #fff; border: none; border-radius: 6px; padding: 6px; cursor: pointer; font-size: 11px;">Importa playlist corrente</button>
+    <div id="ytImportStatus" style="font-size: 10px; color: #777; margin-top: 4px;"></div>
+  </div>
+
   <h2>Scorciatoie</h2>
   <div class="shortcuts" id="shortcuts"></div>
 
